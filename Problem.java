@@ -46,9 +46,9 @@ public class Problem {
 		IOException, InterruptedException {
 			
 			String line = value.toString();
-			setOfWords.remove(line);			
-			if(isConcatenated(setOfWords,line)){
-				word.set("WORD IS");
+			setOfWords.remove(line);		
+			word.set("WORD");
+			if(isConcatenated(setOfWords,line)){				
 				context.write(word, new Text(line));				
 			}
 			setOfWords.add(line);			
@@ -70,16 +70,14 @@ public class Problem {
 			return false;
 		}
 	} 
-
-	public static class Reduce extends Reducer<Text, Text, Text, Text> {
-
-		//reduce function - receives <Key, Value> as <word, one> and 
-		//gives output in the form <word, count> 
+	
+	public static class Combine extends Reducer<Text, Text, Text, Text>{
+		
 		public void reduce(Text key, Iterable<Text> values, Context context) 
 				throws IOException, InterruptedException {
 			int sum = 0;
 			String first = "";
-			String second = "";
+			String second = "";			
 			for (Text val : values) {
 				sum ++;
 				String line = val.toString();
@@ -90,10 +88,41 @@ public class Problem {
 	                second = line;
 	            }
 			}
-			//writing count for each word in the input file.
-			context.write(new Text("Longest word is "), new Text(first));
-			context.write(new Text("Second Longest word is "), new Text(second));
-			context.write(new Text("Total count is "), new Text(sum+""));
+			// output from here goes as input to reducer
+			context.write(key, new Text(first));
+			context.write(key, new Text(second));
+			context.write(new Text("count"), new Text(sum+""));			
+		}		
+	}
+
+	public static class Reduce extends Reducer<Text, Text, Text, Text> {
+
+		//reduce function - receives <Key, Value> as <word, one> and 
+		//gives output in the form <word, count> 
+		public void reduce(Text key, Iterable<Text> values, Context context) 
+				throws IOException, InterruptedException {
+			if (key.toString().equals("WORD")) {
+				String first = "";
+				String second = "";
+				for (Text val : values) {
+					String line = val.toString();
+					if (first.length() < line.length()) {
+						second = first;
+						first = line;
+					} else if (second.length() < line.length()) {
+						second = line;
+					}
+				}
+				context.write(new Text("1st Longest word is"), new Text(first));
+				context.write(new Text("2nd Longest word is"), new Text(second));
+			} else {
+				// total words are counted here.
+				int sum = 0;
+				for (Text val : values) {
+					sum += Integer.parseInt(val.toString());
+				}
+				context.write(new Text("Total count is "), new Text(sum + ""));
+			}
 		}
 	}
 
@@ -110,6 +139,7 @@ public class Problem {
 
 		//setting Mapper and Reducer
 		job.setMapperClass(Map.class);
+		job.setCombinerClass(Combine.class);
 		job.setReducerClass(Reduce.class);
 
 		//setting input and output formats
